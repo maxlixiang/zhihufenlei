@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/*
+exports/*
+!data/.gitkeep
+!exports/.gitkeep
+reports/*
+!reports/.gitkeep
+知乎文章题目汇总.md
+AGENTS.md

@@ -1,0 +1,388 @@
+schema_version: 1
+taxonomy_version: "0.5-draft"
+status: discussion
+updated_at: "2026-09-11"
+language: zh-CN
+
+paths:
+  source_library:
+    path: 'F:\save_zhihu_activity\save_zhihu_activity\原始数据备份-不要删除-9月份爬取'
+    access: read_only
+  project:
+    path: 'F:\知乎\知乎文章智能分类项目'
+  classified_library:
+    path: 'F:\知乎\知乎分类文章库'
+    access: no_write_without_explicit_approval
+
+global_rules:
+  classification_basis: primary_practical_value_and_use
+  hierarchy_depth: 2
+  one_article_one_category: true
+  unknown_topic_action: propose_for_review
+  create_category_without_user_approval: false
+  current_phase_allows_copy_or_migration: false
+  approved_pilot_copy:
+    max_articles: 10
+    destination: 'F:\知乎\知乎分类文章库'
+    review_directory: _待审核
+    does_not_authorize_full_copy: true
+    copy_same_stem_attachment_directory: true
+    preserve_source_files: true
+    generate_obsidian_frontmatter_in_copy: true
+  model_input_preprocessing:
+    remove_nonsemantic_image_markup: true
+    truncate_readable_text: false
+    preserve_comments_as_secondary_context: true
+  conflict_resolution:
+    - determine_primary_use
+    - prefer_genuine_core_category
+    - apply_core_priority_only_if_still_tied
+
+core_priority:
+  - health
+  - business_income
+  - understanding_world
+  - thinking_models
+  - personal_growth
+
+categories:
+  - id: health
+    name: 健康
+    kind: core
+    status: confirmed
+    purpose: 维护或改善身心健康，降低疾病和伤害风险
+    second_level:
+      - 疾病预防与就医
+      - 饮食营养与食品安全
+      - 运动健身与体能
+      - 睡眠休息与恢复
+      - 心理健康
+      - 中医与传统养生
+      - 日常保健与长寿
+      - 身体护理与常见问题
+    boundaries:
+      - 情绪管理和心理调适统一归心理健康
+      - 医疗行业商业格局或政策且不提供个人健康价值时按主要用途分流
+
+  - id: business_income
+    name: 商业挣钱
+    kind: core
+    status: confirmed
+    purpose: 通过职业、经营、创业、项目、产品或服务获得收入和本金
+    excludes:
+      - 使用已有资金进行资产配置和增值
+    second_level:
+      - 赚钱逻辑与商业认知
+      - 商业模式与企业案例
+      - 创业项目与实战
+      - 个人赚钱经历
+      - 行业机会与市场需求
+      - 职业变现与副业
+      - 营销获客与销售
+      - 经营管理与组织
+    boundaries:
+      - 通过劳动经营项目产品或服务获得收入归本类别
+      - 使用已有资金购买资产获取回报归投资理财
+
+  - id: understanding_world
+    name: 认识世界
+    kind: core
+    status: confirmed
+    purpose: 突破个人经验和信息边界，理解城市、行业、社会、国家与世界
+    second_level:
+      - 中国社会与公共议题
+      - 国家观察与国际格局
+      - 城市区域与人口流动
+      - 经济产业与时代趋势
+      - 行业生态与职业群体
+      - 社会现象与群体处境
+      - 制度权力与社会运行
+    boundaries:
+      - 历史事实归历史与文明
+      - 法律规则和案件责任归法律与法律实务
+      - 军事装备和作战规律归军事与战争
+      - 跨领域推理框架归思维模型与思想方法
+      - 指导个人改变归个人成长
+
+  - id: thinking_models
+    name: 思维模型与思想方法
+    kind: core
+    status: confirmed
+    purpose: 提供可跨领域迁移的认知框架、推理方式和判断工具
+    second_level:
+      - 认知偏差与思维误区
+      - 逻辑推理与批判思考
+      - 决策方法与概率风险
+      - 系统思维与因果分析
+      - 博弈策略与利益分析
+      - 人性洞察与行为规律
+      - 哲学观念与思想方法
+    boundaries:
+      - 人性洞察只收跨性别跨关系的普遍行为规律
+      - 以男女择偶恋爱婚姻为具体对象时归两性与亲密关系
+      - 具体社会事实归认识世界
+      - 具体个人改变方法归个人成长
+
+  - id: personal_growth
+    name: 个人成长
+    kind: core
+    status: confirmed
+    purpose: 帮助个人在学习、行动、情绪、自我认识、职业和人生方向上改变
+    second_level:
+      - 学习方法与知识管理
+      - 技能学习与能力提升
+      - 行动执行与习惯养成
+      - 自我认知与心态成长
+      - 人生规划与重要选择
+      - 职业成长与转型
+      - 沟通表达与人际相处
+      - 家庭关系与育儿
+    boundaries:
+      - 情绪管理和心理调适归健康下的心理健康
+      - 可迁移的高效学习策略归学习方法与知识管理
+      - 学习策略即使以高三提分等学校经历为案例仍归学习方法与知识管理
+      - 正式教育制度学历证书和考试本身归教育与考试
+      - 具体计算机技能归计算机与数字技术
+      - 恋爱婚姻归两性与亲密关系
+
+  - id: investing
+    name: 投资理财
+    kind: standard
+    status: confirmed_first_level
+    purpose: 使用已有资金进行资产配置、风险管理和增值
+    second_level: []
+
+  - id: artificial_intelligence
+    name: 人工智能
+    kind: standard
+    status: confirmed_first_level
+    purpose: 了解人工智能本身的模型、能力、用法、工具、开发项目和生态
+    second_level_candidates:
+      - 模型发布与动态
+      - 模型能力与评测
+      - AI使用方法
+      - AI工具与应用
+      - AI编程与开发
+      - AI开源项目
+      - AI行业与生态
+
+  - id: computing_and_digital_technology
+    name: 计算机与数字技术
+    kind: standard
+    status: confirmed
+    purpose: 学习和查询非AI为主体的计算机知识、软件开发、数字工具、系统、开源资源和网络安全知识
+    second_level:
+      - 编程学习与软件开发
+      - 开发工具与环境
+      - 计算机基础与系统
+      - 开源项目与技术资源
+      - 网络安全与隐私
+      - 软件工具与数字效率
+    boundaries:
+      ai_as_main_subject: artificial_intelligence
+      technology_for_income_as_main_purpose: business_income
+      concrete_computing_over_generic_skill_growth: true
+
+  - id: gender_and_intimacy
+    name: 两性与亲密关系
+    kind: standard
+    status: confirmed
+    purpose: 认识性别与婚恋现实，并处理恋爱、择偶、亲密关系、婚姻和关系结束等问题
+    second_level:
+      - 女性与婚恋观
+      - 男性与婚恋观
+      - 性别关系与社会现象
+      - 恋爱择偶与吸引
+      - 亲密关系与相处
+      - 婚姻家庭与忠诚
+      - 分手离婚与关系结束
+      - 性与亲密
+    boundaries:
+      macro_population_policy: understanding_world
+      universal_human_model: thinking_models
+      sentiment_does_not_determine_category: true
+
+  - id: law_and_legal_practice
+    name: 法律与法律实务
+    kind: standard
+    status: confirmed
+    purpose: 查询法律规则、分析案件、解决权益纠纷，积累法律职业与办案知识
+    second_level:
+      - 法律基础与制度
+      - 民事权益与纠纷
+      - 刑事犯罪与公共安全
+      - 案件解析与司法观察
+      - 律师职业与办案实务
+    boundaries:
+      - 社会制度和舆论影响为主的法律事件归认识世界
+      - 具体婚恋相处归两性与亲密关系
+      - 法律规则、案件责任或办案方法为主时归本类别
+      - 法考和律师职业资格等证书考试归教育与考试
+
+  - id: education_and_exams
+    name: 教育与考试
+    kind: standard
+    status: confirmed
+    purpose: 理解正式教育制度、学历与专业选择、学科知识，以及升学和职业资格证书考试
+    second_level:
+      - 基础教育与学科知识
+      - 升学考试与学历认证
+      - 高等教育与专业选择
+      - 教育理念与教育制度
+      - 留学与国际教育
+      - 职业资格与证书考试
+    boundaries:
+      - 可跨领域迁移的高效学习策略归个人成长
+      - 高三提分等经历若重点是学习策略仍归个人成长
+      - 学科知识讲解、教育制度、学历和证书考试归本类别
+      - 具体计算机学习归计算机与数字技术
+      - 法考和律师职业资格等证书考试归本类别
+      - 教育政策的宏观社会影响可归认识世界
+
+  - id: history_and_civilization
+    name: 历史与文明
+    kind: standard
+    status: confirmed
+    purpose: 理解已经发生的历史、人物、文明演进和历史争议
+    second_level:
+      - 中国古代史
+      - 中国近现代史
+      - 世界历史
+      - 历史人物与政治人物
+      - 历史事件与社会变迁
+      - 历史争议与考据
+      - 文明演进与文化传统
+    boundaries:
+      - 当代国家社会和国际局势归认识世界
+      - 武器战术和作战过程为主时归军事与战争
+      - 从历史提炼跨领域认知工具时归思维模型与思想方法
+
+  - id: military_and_warfare
+    name: 军事与战争
+    kind: standard
+    status: confirmed
+    purpose: 理解国防力量、军事装备、作战过程、战争规律和军队生活
+    second_level:
+      - 国防实力与军事格局
+      - 军事装备与国防科技
+      - 战争史与经典战例
+      - 战略战术与军事思想
+      - 军队组织与军旅生活
+      - 当代战争与安全冲突
+    boundaries:
+      - 外交关系和战争社会后果为主时归认识世界
+      - 历史政权和文明演进为主时归历史与文明
+      - 军事能力装备或作战规律为主时归本类别
+
+  - id: natural_sciences
+    name: 自然科学
+    kind: standard
+    status: confirmed
+    purpose: 理解数学、物理、宇宙、生命、演化和自然现象本身
+    second_level:
+      - 数学与形式科学
+      - 物理与宇宙
+      - 生命科学与演化
+      - 地球环境与自然现象
+      - 动植物与生态
+      - 科学常识与综合科普
+    boundaries:
+      - 个人疾病营养和身心改善归健康
+      - 学校学科考试与解题归教育与考试
+      - 科研体制和科技竞争的社会影响归认识世界
+
+  - id: culture_and_entertainment
+    name: 文化娱乐
+    kind: standard
+    status: confirmed
+    purpose: 欣赏、评论和理解影视、文学、音乐、动漫、游戏与艺术作品
+    second_level:
+      - 影视作品与评论
+      - 文学作品与阅读
+      - 音乐与舞台艺术
+      - 动漫与虚构世界
+      - 游戏与电子娱乐
+      - 明星艺人与娱乐现象
+      - 美术书法与审美艺术
+    boundaries:
+      - 作品主要服务于两性历史或思维方法时按主要用途分流
+      - 创作技法归内容创作与传播
+      - 娱乐行业商业模式归商业挣钱或认识世界
+
+  - id: competitive_sports
+    name: 体育竞技
+    kind: standard
+    status: confirmed
+    purpose: 理解竞技项目、运动员、比赛表现、战术和体育文化
+    second_level:
+      - 篮球
+      - 足球
+      - 乒乓球及其他小球
+      - 格斗与武术竞技
+      - 田径游泳与综合赛事
+      - 体育产业与体育文化
+    boundaries:
+      - 改善个人体能为目的时归健康
+      - 体育题材虚构人物和剧情归文化娱乐
+      - 赛事版权和俱乐部经营为主时归商业挣钱
+
+  - id: practical_life_and_consumption
+    name: 生活实用与消费
+    kind: standard
+    status: confirmed
+    purpose: 解决日常生活、购买决策、居住出行、饮食烹饪和休闲安排问题
+    second_level:
+      - 消费决策与省钱经验
+      - 数码家电与耐用品
+      - 服饰穿搭与个人形象
+      - 家居住房与生活技巧
+      - 汽车交通与日常出行
+      - 旅行与目的地体验
+      - 美食与烹饪
+      - 兴趣爱好与休闲
+    boundaries:
+      - 营养疾病风险和身体护理以健康改善为主时归健康
+      - 房产增值归投资理财
+      - 汽车家电等产业趋势归认识世界
+      - 商品经营与获客归商业挣钱
+
+  - id: content_creation_and_communication
+    name: 内容创作与传播
+    kind: standard
+    status: confirmed
+    purpose: 学习写作、摄影、视频、直播、平台运营和内容传播
+    second_level:
+      - 写作与文案
+      - 摄影摄像与后期
+      - 视频直播与内容制作
+      - 平台运营与内容传播
+      - 创作者成长与作品方法
+      - 媒体平台与内容生态
+    boundaries:
+      - 以创作赚钱为主时归商业挣钱
+      - 软件操作或技术实现为主时归计算机与数字技术或人工智能
+      - 平台对社会舆论的影响为主时归认识世界
+      - 作品鉴赏归文化娱乐
+
+  - id: religion_fortune_and_traditional_arts
+    name: 宗教、命理与传统术数
+    kind: standard
+    status: confirmed
+    purpose: 系统积累宗教观念、易学、命理、风水、术数和相关民俗知识
+    second_level:
+      - 宗教信仰与宗教思想
+      - 易经与易学基础
+      - 八字命理
+      - 风水与堪舆
+      - 奇门遁甲及其他术数
+      - 民俗与神秘现象
+    boundaries:
+      - 作为社会文化现象观察时可归认识世界或历史与文明
+      - 提炼通用思想工具时可归思维模型与思想方法
+      - 具体宗教术数知识和实践归本类别
+      - 气功养生和身体练习以健康用途为主时归健康
+
+pending_design:
+  - 确定二级目录命名与新增门槛
+  - 用复杂文章样本验证跨类别裁决规则
+  - 确定置信度、抽查和批次批准规则
