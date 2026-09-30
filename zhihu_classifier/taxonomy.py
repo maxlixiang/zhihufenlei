@@ -25,6 +25,17 @@ class Category:
 
 
 @dataclass(frozen=True)
+class ReviewBucket:
+    id: str
+    name: str
+    status: str
+    path: str
+    purpose: str
+    criteria: tuple[str, ...]
+    boundaries: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Taxonomy:
     version: str
     status: str
@@ -33,6 +44,7 @@ class Taxonomy:
     categories: tuple[Category, ...]
     core_priority: tuple[str, ...]
     raw: dict[str, Any]
+    review_buckets: tuple[ReviewBucket, ...] = ()
 
     @classmethod
     def load(cls, path: Path, *, allow_candidates: bool = False) -> "Taxonomy":
@@ -81,6 +93,45 @@ class Taxonomy:
                 )
             )
 
+        review_buckets: list[ReviewBucket] = []
+        seen_bucket_ids: set[str] = set()
+        seen_bucket_paths: set[str] = set()
+        for item in raw.get("special_review_buckets", []):
+            bucket_id = str(item.get("id", "")).strip()
+            name = str(item.get("name", "")).strip()
+            bucket_path = str(item.get("path", "")).strip()
+            if (
+                not bucket_id
+                or not name
+                or not bucket_path
+                or bucket_id in seen_bucket_ids
+                or bucket_path in seen_bucket_paths
+            ):
+                raise TaxonomyError(
+                    f"特殊审核区 ID、名称或路径缺失/重复：{bucket_id or name or bucket_path}"
+                )
+            seen_bucket_ids.add(bucket_id)
+            seen_bucket_paths.add(bucket_path)
+            review_buckets.append(
+                ReviewBucket(
+                    id=bucket_id,
+                    name=name,
+                    status=str(item.get("status", "draft")),
+                    path=bucket_path,
+                    purpose=str(item.get("purpose", "")).strip(),
+                    criteria=tuple(
+                        str(v).strip()
+                        for v in item.get("criteria", [])
+                        if str(v).strip()
+                    ),
+                    boundaries=tuple(
+                        str(v).strip()
+                        for v in item.get("boundaries", [])
+                        if str(v).strip()
+                    ),
+                )
+            )
+
         return cls(
             version=version,
             status=status,
@@ -89,6 +140,7 @@ class Taxonomy:
             categories=tuple(categories),
             core_priority=tuple(str(v) for v in raw.get("core_priority", [])),
             raw=raw,
+            review_buckets=tuple(review_buckets),
         )
 
     def ensure_classifiable(self, *, allow_draft: bool) -> None:
@@ -125,3 +177,6 @@ class Taxonomy:
 
     def category_by_id(self, category_id: str) -> Category | None:
         return next((item for item in self.categories if item.id == category_id), None)
+
+    def review_bucket_by_id(self, bucket_id: str) -> ReviewBucket | None:
+        return next((item for item in self.review_buckets if item.id == bucket_id), None)

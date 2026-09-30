@@ -163,3 +163,55 @@ def remap_user_prompt(title: str, analysis_json: str) -> str:
 标题：{title}
 语义档案：
 {analysis_json}"""
+
+
+def analysis_repair_system_prompt(taxonomy: Taxonomy) -> str:
+    return analysis_system_prompt(taxonomy) + """
+
+你现在处于“结构修复模式”：
+1. 用户会提供上一次模型生成的 JSON 和校验错误；只修复该 JSON，不索取、猜测或要求重新读取文章全文。
+2. 保留原输出中正确的语义信息，补齐缺失字段，缩短超长文本，从超过上限的数组中选择最重要项目。
+3. 若分类名称或 ID 不在当前规则中，依据已有摘要、主题、用途和关键观点改为最合适的现有目录。
+4. 现有二级目录是有意保持宽泛的；不能仅因缺少更窄的专题目录就提出新分类。
+5. 只有文章的主要用途确实无法被任何现有一级和二级目录稳定承接时，才保留候选新主题。
+6. 输出必须完整符合 analysis_system_prompt 所列 JSON 结构。"""
+
+
+def analysis_repair_user_prompt(
+    title: str,
+    validation_error: str,
+    previous_payload_json: str,
+) -> str:
+    return f"""请修复下面的既有分析结果，只返回修复后的完整 JSON，不要读取或索取原文。
+
+标题：{title}
+上次校验错误：{validation_error}
+上次模型结果：
+{previous_payload_json}"""
+
+
+def candidate_recheck_system_prompt(taxonomy: Taxonomy) -> str:
+    return remap_system_prompt(taxonomy) + """
+
+你现在专门复核上一次提出的候选新主题。必须遵守：
+1. 当前19个一级目录及其二级目录是有意保持宽泛的长期知识体系，不要求目录名称与文章主题逐字一致。
+2. “没有更窄、更精确的专题目录”不构成新增分类的理由；先按文章主要实际用途选择最能稳定承接的现有目录。
+3. 作品评价和书籍推荐通常可归文化娱乐；具体技能学习通常可归个人成长、教育与考试、计算机与数字技术或内容创作；社会、行业、政策和群体现象通常可归认识世界。
+4. 只有现有所有目录都无法合理承接、主题边界清楚、未来可持续积累时，才保留 candidate_new_topics。
+5. 若现有目录能够承接，candidate_new_topics 必须返回空数组，并给出合法的唯一分类。
+6. 不得把候选主题当作正式目录填入 category。"""
+
+
+def candidate_recheck_user_prompt(
+    title: str,
+    analysis_json: str,
+    previous_assignment_json: str,
+) -> str:
+    return f"""请复核上一次候选分类，只依据永久语义档案和上次映射结果重新判断，只返回 JSON。
+
+标题：{title}
+永久语义档案：
+{analysis_json}
+
+上次映射：
+{previous_assignment_json}"""

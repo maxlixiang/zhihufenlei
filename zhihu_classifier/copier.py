@@ -127,11 +127,22 @@ def copy_analysis_run(
                    a.content_hash, aa.id AS analysis_id, ca.id AS assignment_id,
                    ca.level1_id, ca.level1_name, ca.level2_name, ca.confidence,
                    ca.needs_review, ca.candidate_new_topics_json, ca.reason,
-                   aa.summary_short, aa.tags_json
+                   COALESCE(NULLIF(vr.visual_summary, ''), aa.summary_short) AS summary_short,
+                   aa.tags_json, vr.tags_json AS visual_tags_json,
+                   vr.retention_decision
             FROM article_analyses aa
             JOIN articles a ON a.id = aa.article_id
-            JOIN category_assignments ca ON ca.analysis_id = aa.id
-            WHERE aa.run_id = ? AND aa.error IS NULL AND ca.error IS NULL
+            JOIN category_assignments ca ON ca.id = (
+                SELECT ca2.id FROM category_assignments ca2
+                WHERE ca2.article_id = a.id AND ca2.error IS NULL
+                ORDER BY ca2.id DESC LIMIT 1
+            )
+            LEFT JOIN visual_reviews vr ON vr.id = (
+                SELECT vr2.id FROM visual_reviews vr2
+                WHERE vr2.article_id = a.id ORDER BY vr2.id DESC LIMIT 1
+            )
+            WHERE aa.run_id = ? AND aa.error IS NULL
+              AND COALESCE(vr.retention_decision, '') != '不纳入'
             ORDER BY aa.id
             """,
             (analysis_run_id,),
@@ -189,8 +200,10 @@ def copy_analysis_run(
                 )
                 try:
                     tags = json.loads(row["tags_json"] or "[]")
+                    visual_tags = json.loads(row["visual_tags_json"] or "[]")
                 except json.JSONDecodeError as exc:
                     raise ValueError("语义档案中的 tags 不是合法 JSON") from exc
+                tags = list(dict.fromkeys([*tags, *visual_tags]))
                 output_bytes, generated_frontmatter = _render_obsidian_copy(
                     source.read_bytes(),
                     title=row["title"],

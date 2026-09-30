@@ -1,7 +1,7 @@
 schema_version: 1
-taxonomy_version: "0.5-draft"
-status: discussion
-updated_at: "2026-09-11"
+taxonomy_version: "1.1"
+status: final
+updated_at: "2026-09-12"
 language: zh-CN
 
 paths:
@@ -29,6 +29,21 @@ global_rules:
     copy_same_stem_attachment_directory: true
     preserve_source_files: true
     generate_obsidian_frontmatter_in_copy: true
+  completed_full_copy:
+    taxonomy_version: '1.1'
+    article_count: 2330
+    attachment_file_count: 11435
+    destination: 'F:\知乎\知乎分类文章库'
+    completed_at: '2026-09-12'
+    future_copy_requires_explicit_approval: true
+  incremental_workflow:
+    implemented: true
+    commands: [update, copy-new]
+    require_explicit_copy_confirmation: true
+    preserve_existing_notes: true
+    duplicate_identity: sha256_markdown_bytes
+    unknown_category_directory: _待审核/未分类/待定
+    move_or_overwrite_existing_notes: false
   model_input_preprocessing:
     remove_nonsemantic_image_markup: true
     truncate_readable_text: false
@@ -60,8 +75,12 @@ categories:
       - 中医与传统养生
       - 日常保健与长寿
       - 身体护理与常见问题
+      - 个人安全防护
     boundaries:
       - 情绪管理和心理调适统一归心理健康
+      - 预防人身侵害的独行、独居、防身工具和日常风险识别归个人安全防护
+      - 网络攻击、账号和数据隐私归计算机与数字技术／网络安全与隐私
+      - 刑事案件、法律责任和公共治安制度归法律与法律实务
       - 医疗行业商业格局或政策且不提供个人健康价值时按主要用途分流
 
   - id: business_income
@@ -117,9 +136,12 @@ categories:
       - 博弈策略与利益分析
       - 人性洞察与行为规律
       - 哲学观念与思想方法
+      - 规则利用与现实策略
     boundaries:
       - 人性洞察只收跨性别跨关系的普遍行为规律
       - 以男女择偶恋爱婚姻为具体对象时归两性与亲密关系
+      - 识别制度程序组织惯例与实际执行之间的缝隙并形成可迁移行动策略时归规则利用与现实策略
+      - 单纯解释法律是否合法归法律与法律实务，具体生活技巧或商业经营仍按主要用途分流
       - 具体社会事实归认识世界
       - 具体个人改变方法归个人成长
 
@@ -142,22 +164,40 @@ categories:
       - 可迁移的高效学习策略归学习方法与知识管理
       - 学习策略即使以高三提分等学校经历为案例仍归学习方法与知识管理
       - 正式教育制度学历证书和考试本身归教育与考试
+      - 特定职业证书备考若考试对象不可替换则归教育与考试下的职业资格与证书考试
       - 具体计算机技能归计算机与数字技术
       - 恋爱婚姻归两性与亲密关系
 
   - id: investing
     name: 投资理财
     kind: standard
-    status: confirmed_first_level
+    status: confirmed
     purpose: 使用已有资金进行资产配置、风险管理和增值
-    second_level: []
+    second_level:
+      - 投资理念与资产配置
+      - 股票研究与价值分析
+      - 市场行情与交易策略
+      - 量化投资与程序化交易
+      - 基金债券与稳健理财
+      - 房地产与实物资产投资
+      - 数字资产与另类投资
+      - 风险管理与投资心理
+    boundaries:
+      - 通过劳动经营项目产品或服务获得收入归商业挣钱
+      - 已有资金的配置风险管理和增值归投资理财
+      - 宏观经济文章以理解社会为主时归认识世界
+      - 宏观分析主要用于资产配置或交易决策时归投资理财
+      - 编程技术本身归计算机与数字技术
+      - 编程用于选股回测或交易时归量化投资与程序化交易
+      - 自住房购买和居住体验归生活实用与消费
+      - 房产收益和资产配置归房地产与实物资产投资
 
   - id: artificial_intelligence
     name: 人工智能
     kind: standard
-    status: confirmed_first_level
+    status: confirmed
     purpose: 了解人工智能本身的模型、能力、用法、工具、开发项目和生态
-    second_level_candidates:
+    second_level:
       - 模型发布与动态
       - 模型能力与评测
       - AI使用方法
@@ -165,6 +205,12 @@ categories:
       - AI编程与开发
       - AI开源项目
       - AI行业与生态
+    boundaries:
+      - AI辅助医疗诊断的实用健康内容归健康
+      - 利用AI创业或挣钱归商业挣钱
+      - AI对社会就业或国家竞争的影响归认识世界
+      - AI背后的通用推理框架归思维模型与思想方法
+      - AI模型工具开发和生态本身归人工智能
 
   - id: computing_and_digital_technology
     name: 计算机与数字技术
@@ -217,6 +263,7 @@ categories:
       - 社会制度和舆论影响为主的法律事件归认识世界
       - 具体婚恋相处归两性与亲密关系
       - 法律规则、案件责任或办案方法为主时归本类别
+      - 律师执业习惯、案件管理、客户沟通和风险防控归律师职业与办案实务
       - 法考和律师职业资格等证书考试归教育与考试
 
   - id: education_and_exams
@@ -235,6 +282,8 @@ categories:
       - 可跨领域迁移的高效学习策略归个人成长
       - 高三提分等经历若重点是学习策略仍归个人成长
       - 学科知识讲解、教育制度、学历和证书考试归本类别
+      - 一级建造师法考CPA医师资格教师资格等特定职业证书的复习报考和应试内容归职业资格与证书考试
+      - 只有考试背景可以替换且核心方法能够跨考试跨领域迁移时才归个人成长下的学习方法与知识管理
       - 具体计算机学习归计算机与数字技术
       - 法考和律师职业资格等证书考试归本类别
       - 教育政策的宏观社会影响可归认识世界
@@ -252,10 +301,13 @@ categories:
       - 历史事件与社会变迁
       - 历史争议与考据
       - 文明演进与文化传统
+      - 明末清初与清史争议
     boundaries:
       - 当代国家社会和国际局势归认识世界
       - 武器战术和作战过程为主时归军事与战争
       - 从历史提炼跨领域认知工具时归思维模型与思想方法
+      - 明末清初史事、清初帝王身世与民族身份、清史史料真实性和相关辨伪讨论归明末清初与清史争议
+      - 收录争议研究不代表认可任何具体历史假说
 
   - id: military_and_warfare
     name: 军事与战争
@@ -295,7 +347,7 @@ categories:
     name: 文化娱乐
     kind: standard
     status: confirmed
-    purpose: 欣赏、评论和理解影视、文学、音乐、动漫、游戏与艺术作品
+    purpose: 欣赏、评论和理解影视、文学、音乐、动漫、游戏、艺术及以娱乐或视觉欣赏为主要用途的内容
     second_level:
       - 影视作品与评论
       - 文学作品与阅读
@@ -304,8 +356,14 @@ categories:
       - 游戏与电子娱乐
       - 明星艺人与娱乐现象
       - 美术书法与审美艺术
+      - 幽默段子与搞笑内容
+      - 美女与视觉欣赏
     boundaries:
       - 作品主要服务于两性历史或思维方法时按主要用途分流
+      - 笑话段子抖机灵梗图及主要价值为逗笑的内容归幽默段子与搞笑内容
+      - 主要收藏意图为欣赏女性人像、写真、账号、主播或成人视觉内容时归美女与视觉欣赏
+      - 女性群体与婚恋讨论归两性与亲密关系，相关行业和摄影技法按主要用途分流
+      - 图片内容尚未被识别时先进入图片为主待识别审核区，不依据标题强行分类
       - 创作技法归内容创作与传播
       - 娱乐行业商业模式归商业挣钱或认识世界
 
@@ -382,7 +440,22 @@ categories:
       - 具体宗教术数知识和实践归本类别
       - 气功养生和身体练习以健康用途为主时归健康
 
-pending_design:
-  - 确定二级目录命名与新增门槛
-  - 用复杂文章样本验证跨类别裁决规则
-  - 确定置信度、抽查和批次批准规则
+special_review_buckets:
+  - id: image_dominant_pending_identification
+    name: 图片为主待识别
+    status: confirmed
+    path: _待审核/图片为主待识别
+    purpose: 暂存正文文字不足且图片内容尚未被人工或视觉模型识别的文章包
+    criteria:
+      - 回答正文主要由本地图片构成
+      - 去除图片标记后正文极少且文字不足以判断图片内容
+      - 图片尚未经过人工或视觉模型读取
+    boundaries:
+      - 这是审核处理状态而不是正式一级或二级分类
+      - 图片识别后应改入真正主题目录
+      - 不得仅依据标题把未知图片内容强行归类
+
+future_governance:
+  - 新类别须经用户确认并通过新版本发布，不在当前版本中静默扩展
+  - 持续用复杂样本补充跨类别判例，不阻塞正式目录基线
+  - 置信度阈值、抽查比例和复制批准属于运营策略，可独立调整

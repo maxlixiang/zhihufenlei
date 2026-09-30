@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 import unittest
 
@@ -46,7 +47,7 @@ class MetadataTests(unittest.TestCase):
         }
         self.assertTrue(validate_metadata(payload, self.taxonomy).needs_review)
 
-    def test_draft_second_level_forces_review(self):
+    def test_confirmed_ai_second_level_does_not_force_review(self):
         payload = {
             "category": {
                 "level1_id": "artificial_intelligence",
@@ -61,7 +62,31 @@ class MetadataTests(unittest.TestCase):
             "needs_review": False,
             "candidate_new_topic": None,
         }
-        self.assertTrue(validate_metadata(payload, self.taxonomy).needs_review)
+        self.assertFalse(validate_metadata(payload, self.taxonomy).needs_review)
+
+    def test_future_draft_second_level_forces_review(self):
+        categories = tuple(
+            replace(category, uses_candidates=True)
+            if category.id == "artificial_intelligence"
+            else category
+            for category in self.taxonomy.categories
+        )
+        draft_taxonomy = replace(self.taxonomy, categories=categories)
+        payload = {
+            "category": {
+                "level1_id": "artificial_intelligence",
+                "level1_name": "人工智能",
+                "level2_name": "AI使用方法",
+            },
+            "tags": ["人工智能"],
+            "summary": "摘要",
+            "purpose": "用途",
+            "reason": "理由",
+            "confidence": 0.95,
+            "needs_review": False,
+            "candidate_new_topic": None,
+        }
+        self.assertTrue(validate_metadata(payload, draft_taxonomy).needs_review)
 
     def test_unknown_second_level_rejected(self):
         payload = {

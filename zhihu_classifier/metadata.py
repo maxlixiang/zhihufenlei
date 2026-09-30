@@ -39,6 +39,12 @@ class CategoryAssignment:
 def validate_assignment(payload: Any, taxonomy: Taxonomy) -> CategoryAssignment:
     if not isinstance(payload, dict):
         raise MetadataError("assignment 必须是 JSON 对象")
+    if (
+        "category" not in payload
+        and payload.get("type") == "json_object"
+        and isinstance(payload.get("content"), dict)
+    ):
+        payload = payload["content"]
     category = payload.get("category")
     if not isinstance(category, dict):
         raise MetadataError("assignment 缺少 category 对象")
@@ -50,7 +56,13 @@ def validate_assignment(payload: Any, taxonomy: Taxonomy) -> CategoryAssignment:
         raise MetadataError("candidate_new_topics 必须是数组")
     candidates = tuple(item for item in candidates_raw if isinstance(item, dict))
     known_category = taxonomy.category_by_id(level1_id)
-    if not candidates:
+    category_is_empty = not level1_id and not level1_name and not level2_name
+    explicitly_insufficient = (
+        category_is_empty
+        and not candidates
+        and bool(payload.get("needs_review", False))
+    )
+    if not candidates and not explicitly_insufficient:
         if known_category is None:
             raise MetadataError(f"未知一级分类 ID：{level1_id}")
         if level1_name != known_category.name:
@@ -70,6 +82,8 @@ def validate_assignment(payload: Any, taxonomy: Taxonomy) -> CategoryAssignment:
         raise MetadataError("assignment.confidence 必须是数字") from exc
     if not 0 <= confidence <= 1:
         raise MetadataError("assignment.confidence 必须在 0 到 1 之间")
+    if explicitly_insufficient and confidence > 0.2:
+        raise MetadataError("内容不足且未分类时，confidence 不能高于 0.2")
     uses_candidates = known_category is not None and known_category.uses_candidates
     needs_review = (
         bool(payload.get("needs_review", False))

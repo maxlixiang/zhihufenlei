@@ -9,6 +9,9 @@ from .metadata import CategoryAssignment, validate_assignment
 ANALYSIS_VERSION = "2"
 ANALYSIS_PROMPT_VERSION = "6"
 ASSIGNMENT_PROMPT_VERSION = "2"
+ANALYSIS_REPAIR_PROMPT_VERSION = "1"
+CANDIDATE_RECHECK_PROMPT_VERSION = "1"
+LOCAL_STRUCTURE_REPAIR_VERSION = "1"
 
 
 class SemanticError(ValueError):

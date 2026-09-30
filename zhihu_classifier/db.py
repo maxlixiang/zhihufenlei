@@ -154,6 +154,73 @@ ON category_assignments(article_id, taxonomy_version, id DESC);
 CREATE INDEX IF NOT EXISTS idx_category_assignments_review
 ON category_assignments(needs_review, id DESC);
 
+CREATE TABLE IF NOT EXISTS visual_review_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    imported_at TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    source_hash TEXT NOT NULL UNIQUE,
+    taxonomy_version TEXT NOT NULL,
+    item_count INTEGER NOT NULL,
+    reviewed_count INTEGER NOT NULL,
+    override_count INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS visual_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL REFERENCES visual_review_runs(id),
+    article_id INTEGER NOT NULL REFERENCES articles(id),
+    content_hash TEXT NOT NULL,
+    taxonomy_version TEXT NOT NULL,
+    review_status TEXT NOT NULL,
+    category_decision TEXT NOT NULL,
+    level1_id TEXT NOT NULL,
+    level1_name TEXT NOT NULL,
+    level2_name TEXT NOT NULL,
+    visual_summary TEXT,
+    collection_intent TEXT,
+    retention_decision TEXT NOT NULL,
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    review_note TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(run_id, article_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_visual_reviews_latest
+ON visual_reviews(article_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS manual_review_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    imported_at TEXT NOT NULL,
+    source_path TEXT NOT NULL,
+    source_hash TEXT NOT NULL UNIQUE,
+    source_taxonomy_version TEXT NOT NULL,
+    target_taxonomy_version TEXT NOT NULL,
+    item_count INTEGER NOT NULL,
+    accepted_count INTEGER NOT NULL,
+    override_count INTEGER NOT NULL,
+    tag_count INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS manual_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL REFERENCES manual_review_runs(id),
+    article_id INTEGER NOT NULL REFERENCES articles(id),
+    content_hash TEXT NOT NULL,
+    previous_assignment_id INTEGER NOT NULL REFERENCES category_assignments(id),
+    new_assignment_id INTEGER NOT NULL REFERENCES category_assignments(id),
+    review_result TEXT NOT NULL,
+    level1_id TEXT NOT NULL,
+    level1_name TEXT NOT NULL,
+    level2_name TEXT NOT NULL,
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    review_note TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(run_id, article_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_manual_reviews_latest
+ON manual_reviews(article_id, id DESC);
+
 CREATE TABLE IF NOT EXISTS api_usage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     phase TEXT NOT NULL,
@@ -223,6 +290,60 @@ CREATE TABLE IF NOT EXISTS copy_outputs (
     created_at TEXT NOT NULL,
     UNIQUE(copy_run_id, article_id)
 );
+
+CREATE TABLE IF NOT EXISTS full_copy_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    completed_at TEXT,
+    taxonomy_version TEXT NOT NULL,
+    destination_root TEXT NOT NULL,
+    requested_count INTEGER NOT NULL,
+    copied_count INTEGER NOT NULL DEFAULT 0,
+    existing_count INTEGER NOT NULL DEFAULT 0,
+    error_count INTEGER NOT NULL DEFAULT 0,
+    attachment_copied_count INTEGER NOT NULL DEFAULT 0,
+    attachment_existing_count INTEGER NOT NULL DEFAULT 0,
+    attachment_error_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    manifest_path TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS full_copy_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_copy_run_id INTEGER NOT NULL REFERENCES full_copy_runs(id),
+    article_id INTEGER NOT NULL REFERENCES articles(id),
+    analysis_id INTEGER NOT NULL REFERENCES article_analyses(id),
+    assignment_id INTEGER NOT NULL REFERENCES category_assignments(id),
+    source_path TEXT NOT NULL,
+    destination_path TEXT NOT NULL,
+    source_content_hash TEXT NOT NULL,
+    output_content_hash TEXT,
+    frontmatter_json TEXT,
+    disposition TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(full_copy_run_id, article_id)
+);
+
+CREATE TABLE IF NOT EXISTS full_copy_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    full_copy_run_id INTEGER NOT NULL REFERENCES full_copy_runs(id),
+    article_id INTEGER NOT NULL REFERENCES articles(id),
+    source_path TEXT NOT NULL,
+    destination_path TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    disposition TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(full_copy_run_id, source_path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_full_copy_items_run
+ON full_copy_items(full_copy_run_id, article_id);
+
+CREATE INDEX IF NOT EXISTS idx_full_copy_attachments_run
+ON full_copy_attachments(full_copy_run_id, article_id);
 """
 
 
@@ -370,18 +491,33 @@ class Database:
         with self.connect() as connection:
             articles = connection.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
             history = connection.execute("SELECT COUNT(*) FROM classifications").fetchone()[0]
-            analysis_base = """
-                FROM article_analyses aa JOIN articles a ON a.id = aa.article_id
-                WHERE aa.id = (
-                    SELECT aa2.id FROM article_analyses aa2
-                    WHERE aa2.article_id = aa.article_id
-                      AND aa2.content_hash = a.content_hash
-                    ORDER BY aa2.id DESC LIMIT 1
+            analyses = connection.execute(
+                """
+                SELECT COUNT(*) FROM articles a
+                WHERE EXISTS (
+                    SELECT 1 FROM article_analyses aa
+                    WHERE aa.article_id = a.id
+                      AND aa.content_hash = a.content_hash
+                      AND aa.error IS NULL
                 )
-            """
-            analyses = connection.execute("SELECT COUNT(*) " + analysis_base).fetchone()[0]
+                """
+            ).fetchone()[0]
             analysis_errors = connection.execute(
-                "SELECT COUNT(*) " + analysis_base + " AND aa.error IS NOT NULL"
+                """
+                SELECT COUNT(*) FROM articles a
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM article_analyses aa
+                    WHERE aa.article_id = a.id
+                      AND aa.content_hash = a.content_hash
+                      AND aa.error IS NULL
+                )
+                  AND EXISTS (
+                    SELECT 1 FROM article_analyses aa
+                    WHERE aa.article_id = a.id
+                      AND aa.content_hash = a.content_hash
+                      AND aa.error IS NOT NULL
+                )
+                """
             ).fetchone()[0]
             assignment_base = """
                 FROM category_assignments ca
@@ -409,6 +545,12 @@ class Database:
                 FROM api_usage
                 """
             ).fetchone()
+            running_analysis_runs = connection.execute(
+                "SELECT COUNT(*) FROM analysis_runs WHERE status = 'running'"
+            ).fetchone()[0]
+            running_assignment_runs = connection.execute(
+                "SELECT COUNT(*) FROM assignment_runs WHERE status = 'running'"
+            ).fetchone()[0]
         return {
             "articles": articles,
             "current_analyses": analyses,
@@ -424,4 +566,6 @@ class Database:
             "api_cache_miss_tokens": usage["cache_miss"],
             "api_completion_tokens": usage["completion_tokens"],
             "api_total_tokens": usage["total_tokens"],
+            "running_analysis_runs": running_analysis_runs,
+            "running_assignment_runs": running_assignment_runs,
         }
