@@ -262,6 +262,27 @@ class IncrementalTests(unittest.TestCase):
             copy_incremental(self.database, self.taxonomy, destination_root=self.destination,
                              manifest_path=self.root / "manifest-1.json")
 
+    def test_image_cleanup_in_incremental_copy_preserves_source_and_repeat(self):
+        source = self.add(1)
+        source.write_text(source.read_text(encoding="utf-8") +
+            '\n![](data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="2"></svg>)'
+            + '![[惊讶]](文章1/a.png) ![](https://picx.zhimg.com/example.jpg)', encoding="utf-8")
+        source.with_suffix("").mkdir()
+        (source.with_suffix("") / "a.png").write_bytes(b"fixture image")
+        original = source.read_bytes()
+        first = self.update()
+        note = next(self.destination.rglob("文章1.md"))
+        output = note.read_text(encoding="utf-8")
+        self.assertNotIn("data:image/svg", output)
+        self.assertIn(r"![\[惊讶\]](文章1/a.png)", output)
+        self.assertEqual(first["copy"]["image_cleanup"],
+            {"placeholders_removed": 1, "alt_text_fixed": 1, "remote_images_remaining": 1})
+        self.assertEqual(source.read_bytes(), original)
+        self.assertEqual((note.with_suffix("") / "a.png").read_bytes(), b"fixture image")
+        self.update()
+        self.assertEqual(self.client.calls, 1)
+        self.assertEqual(note.read_text(encoding="utf-8"), output)
+
     def test_no_api_when_only_copying_existing_analysis(self):
         self.add(1)
         scan_library(self.database, self.source)

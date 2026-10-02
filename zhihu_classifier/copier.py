@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
@@ -10,6 +11,7 @@ import shutil
 import yaml
 
 from .db import Database
+from .image_cleanup import clean_markdown_images
 from .taxonomy import Taxonomy
 
 
@@ -72,6 +74,7 @@ def _render_obsidian_copy(
     source_hash: str,
     taxonomy_version: str,
     needs_review: bool,
+    image_report: dict | None = None,
 ) -> tuple[bytes, dict[str, object]]:
     text = source_bytes.decode("utf-8-sig")
     match = FRONT_MATTER_RE.match(text)
@@ -96,6 +99,9 @@ def _render_obsidian_copy(
     yaml_text = yaml.safe_dump(
         frontmatter, allow_unicode=True, sort_keys=False, default_flow_style=False
     ).strip()
+    body, cleanup = clean_markdown_images(body)
+    if image_report is not None:
+        image_report.update(asdict(cleanup))
     output = f"---\n{yaml_text}\n---\n\n{body}"
     return output.encode("utf-8"), generated
 

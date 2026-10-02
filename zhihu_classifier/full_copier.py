@@ -195,6 +195,7 @@ def copy_all_current(
         output_hash: str | None = None
         generated_frontmatter: dict[str, object] | None = None
         attachment_items: list[dict[str, object]] = []
+        image_report: dict = {}
         try:
             source = source.resolve(strict=True)
             if not _inside(source, source_root) or source.is_symlink():
@@ -219,6 +220,7 @@ def copy_all_current(
                 source_hash=row["content_hash"],
                 taxonomy_version=taxonomy.version,
                 needs_review=bool(row["needs_review"]),
+                image_report=image_report,
             )
             output_hash = hashlib.sha256(output_bytes).hexdigest()
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -287,6 +289,7 @@ def copy_all_current(
             "source_content_hash": row["content_hash"],
             "output_content_hash": output_hash,
             "frontmatter": generated_frontmatter,
+            "image_cleanup": image_report,
             "category": f'{row["level1_name"]}/{row["level2_name"]}',
             "confidence": row["confidence"],
             "needs_review": bool(row["needs_review"]),
@@ -355,6 +358,11 @@ def copy_all_current(
         "pending": pending,
         "conflicts": len(conflict_items),
         "conflict_items": conflict_items,
+        "image_cleanup": {
+            name: sum(item.get("image_cleanup", {}).get(name, 0)
+                      for item in manifest_items if item.get("disposition") in {"copied", "already_exists"})
+            for name in ("placeholders_removed", "alt_text_fixed", "remote_images_remaining")
+        },
         "items": manifest_items,
     }
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
