@@ -1,0 +1,14 @@
+# 本机默认配置。可另存为workflow.local.yaml，通过--config指定。
+# 不保存API密钥或登录内容；继续使用各项目已有.env和state.json。
+collector_project: 'F:\Git上的程序等等\zhihu_data_collection-playwright技术'
+classifier_project: 'F:\知乎\知乎文章智能分类项目'
+download_root: 'F:\Git上的程序等等\zhihu_data_collection-playwright技术\data\articles'
+source_library: 'F:\save_zhihu_activity\save_zhihu_activity\原始数据备份-不要删除-9月份爬取'
+classified_library: 'F:\知乎\知乎分类文章库'
+collector_database: 'F:\Git上的程序等等\zhihu_data_collection-playwright技术\zhihu_articles.db'
+login_state: 'F:\Git上的程序等等\zhihu_data_collection-playwright技术\state.json'
+report_root: 'F:\知乎\知乎文章智能分类项目\reports\workflow'
+collector_python: null
+classifier_python: null
+limit: 30
+max_new: 200
