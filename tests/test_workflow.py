@@ -135,6 +135,46 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(self.config.report_root.exists())
         self.assertEqual(before, digest(self.config.collector_database))
 
+    def test_login_failure_stops_sync_and_classification(self):
+        self.add(1)
+        calls=[]
+        def failed(command, cwd, env, log):
+            calls.append(command)
+            self.assertIn("--interactive-login", command)
+            return {"returncode":3,"stdout":"登录已取消"}
+        result=run_workflow(self.config,confirm=True,runner=failed)
+        self.assertEqual(len(calls),1)
+        self.assertEqual(result["status"],"failed")
+        self.assertEqual(result["download"]["status"],"login_required")
+        self.assertIsNone(result["sync"]);self.assertIsNone(result["classification"])
+        self.assertEqual(list(self.source.rglob("*.md")),[])
+        self.assertEqual(self.client.calls,0)
+
+    def test_legacy_zero_exit_without_new_run_stops(self):
+        result=run_workflow(self.config,confirm=True,
+            runner=lambda *args:{"returncode":0,"stdout":"旧程序登录失效"})
+        self.assertEqual(result["status"],"failed")
+        self.assertIsNone(result["classification"])
+
+    def test_zero_exit_incomplete_empty_download_stops_following_steps(self):
+        self.complete=False
+        self.new_count=0
+        result=self.run_it()
+        self.assertEqual(result["status"],"failed")
+        self.assertIsNone(result["sync"])
+        self.assertIsNone(result["classification"])
+        self.assertEqual(self.client.calls,0)
+
+    def test_missing_login_file_is_delegated_and_skip_download_needs_no_login(self):
+        config=replace(self.config,login_state=self.root/"absent.json")
+        self.new_count=1
+        result=run_workflow(config,confirm=True,runner=self.runner)
+        self.assertEqual(result["status"],"completed")
+        self.assertEqual(result["sync"]["copied"],1)
+        again=run_workflow(config,confirm=True,skip_download=True,runner=self.runner)
+        self.assertEqual(again["status"],"completed")
+        self.assertEqual(self.round,1)
+
     def test_zero_exit_with_incomplete_download_is_not_success(self):
         self.complete = False
         self.new_count = 1

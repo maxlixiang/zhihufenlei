@@ -381,7 +381,7 @@ def workflow_lock(path: Path):
 
 def run_command(command: list[str], cwd: Path, env: dict, log_path: Path):
     output = []
-    phase = "下载" if "zhihu_scraper.py" in command else "分类并生成Obsidian副本"
+    phase = "登录检查与下载" if "zhihu_scraper.py" in command else "分类并生成Obsidian副本"
     with log_path.open("x", encoding="utf-8") as log, ConsoleProgress() as progress:
         progress.update(f"[{phase}] 子程序正在运行，等待下一条进度输出……")
         process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE,
@@ -436,21 +436,22 @@ def run_workflow(config: WorkflowConfig, *, confirm: bool = False, dry_run: bool
             if skip_download:
                 print("\n[阶段 1/3] 依次下载：本次跳过", flush=True)
             if not skip_download:
-                print("\n[阶段 1/3] 依次下载：启动Playwright采集", flush=True)
+                print("\n[阶段 1/3] 依次下载：先检查登录，通过后再采集", flush=True)
                 before = collector_runs(config)
-                if not config.login_state.is_file():
-                    summary["download"] = {"status": "failed", "error": "登录态不存在，请先运行下载项目init_login.py"}
-                else:
-                    command = [config.collector_python, "-u", "-B", "zhihu_scraper.py", "--limit", str(config.limit),
-                               "--continue-to-boundary", "--max-new", str(config.max_new),
-                               "--output-dir", str(config.download_root), "--db-file", str(config.collector_database),
-                               "--state-file", str(config.login_state)]
-                    result = runner(command, config.collector_project, env, config.report_root / f"{run_id}-download.log")
-                    after = collector_runs(config)
-                    new_runs = [value for key, value in after.items() if key not in before]
-                    complete = (result["returncode"] == 0 and len(new_runs) == 1 and new_runs[0]["status"] == "complete")
-                    summary["download"] = {"status": "complete" if complete else "incomplete",
-                                           "returncode": result["returncode"], "runs": new_runs}
+                command = [config.collector_python, "-u", "-B", "zhihu_scraper.py", "--limit", str(config.limit),
+                           "--continue-to-boundary", "--max-new", str(config.max_new), "--interactive-login",
+                           "--output-dir", str(config.download_root), "--db-file", str(config.collector_database),
+                           "--state-file", str(config.login_state)]
+                result = runner(command, config.collector_project, env, config.report_root / f"{run_id}-download.log")
+                after = collector_runs(config)
+                new_runs = [value for key, value in after.items() if key not in before]
+                complete = (result["returncode"] == 0 and len(new_runs) == 1 and new_runs[0]["status"] == "complete")
+                summary["download"] = {"status": "complete" if complete else "incomplete",
+                                       "returncode": result["returncode"], "runs": new_runs}
+                if (result["returncode"] != 0 or len(new_runs) != 1
+                        or (not complete and new_runs[0]["new_count"] == 0)):
+                    summary["download"]["status"] = "login_required" if result["returncode"] == 3 else "failed"
+                    raise RuntimeError("下载未通过登录检查或异常停止，未执行追加备份与分类；请查看上方提示完成登录后重试。")
             download_status = {"complete": "完成", "incomplete": "未完整结束", "failed": "失败", "skipped": "跳过"}[summary["download"]["status"]]
             print(f"[阶段 1/3] 下载状态：{download_status}；接下来核对已保存文章", flush=True)
             print("\n[阶段 2/3] 追加原始备份：扫描、去重、校验并追加新文章和附件", flush=True)
@@ -476,6 +477,7 @@ def run_workflow(config: WorkflowConfig, *, confirm: bool = False, dry_run: bool
             summary.update(status="interrupted", error="用户中断，已停止子进程；下次可补处理")
         except Exception as exc:
             summary.update(status="failed", error=str(exc))
+            print(f"[工作流停止] {exc}", flush=True)
         finally:
             summary["report"] = str(report)
             with report.open("x", encoding="utf-8") as handle:
