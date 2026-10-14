@@ -186,10 +186,13 @@ class ClassifierTests(unittest.TestCase):
             self.assertEqual(database.counts()["latest_assignments"], 1)
             self.assertEqual(database.counts()["latest_needs_review"], 0)
             self.assertEqual(database.counts()["api_calls_recorded"], 1)
-            self.assertEqual(len(progress_events), 1)
-            self.assertEqual(progress_events[0]["current"], 1)
-            self.assertEqual(progress_events[0]["processed"], 1)
-            self.assertEqual(progress_events[0]["errors"], 0)
+            self.assertEqual(progress_events[0]["state"], "started")
+            completed = [event for event in progress_events if not event.get("state")]
+            self.assertEqual(len(completed), 1)
+            self.assertEqual(completed[0]["current"], 1)
+            self.assertEqual(completed[0]["processed"], 1)
+            self.assertEqual(completed[0]["errors"], 0)
+            self.assertIsNotNone(completed[0]["elapsed_seconds"])
 
             newer_taxonomy = Taxonomy(
                 version="test-new-version",

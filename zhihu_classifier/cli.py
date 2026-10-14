@@ -165,13 +165,29 @@ def _print_item_progress(event: dict) -> None:
     total = int(event["total"])
     current = int(event["current"])
     percent = (current / total * 100) if total else 100.0
-    title = str(event.get("title", "")).replace("\r", " ").replace("\n", " ")[:36]
+    title = str(event.get("title", "")).replace("\r", " ").replace("\n", " ")
+    if event.get("state"):
+        state = event["state"]
+        attempt = event.get("attempt", 1)
+        maximum = event.get("max_attempts", "?")
+        messages = {
+            "started": "开始分析", "request": f"正在请求模型（尝试{attempt}/{maximum}）",
+            "waiting": f"等待模型响应（尝试{attempt}/{maximum}）",
+            "failed": f"请求失败：{event.get('reason', '')}",
+            "retry": f"{event.get('reason', '')}；{event.get('retry_delay', 0)}秒后重试"
+                     f"（下一次{event.get('next_attempt', '?')}/{maximum}）",
+        }
+        print(f"[{labels.get(event['phase'], event['phase'])}] 当前 {current}/{total} | {title} | "
+              f"单篇已用时 {event.get('elapsed_seconds', 0):.1f} 秒 | {messages.get(state, state)}", flush=True)
+        return
     line = (
         f"[{labels.get(event['phase'], event['phase'])}] "
         f"{current}/{total} ({percent:5.1f}%) "
         f"成功 {event['processed']} | 错误 {event['errors']} | {title}"
     )
-    print("\r" + line.ljust(110), end="", flush=True)
+    if event.get("elapsed_seconds") is not None:
+        line += f" | 单篇请求用时 {event['elapsed_seconds']:.1f} 秒"
+    print(line, flush=True)
 
 
 def _print_status_dashboard(counts: dict[str, int], *, clear: bool) -> None:
@@ -198,7 +214,7 @@ def _print_copy_progress(event: dict[str, object]) -> None:
         f"[全量复制] {current}/{total} ({percent:5.1f}%) "
         f"新增 {event['copied']} | 已存在 {event['existing']} | 错误 {event['errors']} | {title}"
     )
-    print("\r" + line.ljust(120), end="", flush=True)
+    print(line, flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:

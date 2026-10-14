@@ -31,7 +31,7 @@ class DeepSeekClient:
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
 
-    def complete_json(self, *, system_prompt: str, user_prompt: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    def complete_json(self, *, system_prompt: str, user_prompt: str, progress=None) -> tuple[dict[str, Any], dict[str, Any]]:
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": [
@@ -47,7 +47,17 @@ class DeepSeekClient:
 
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         last_error: Exception | None = None
+        started = time.monotonic()
+        failures = []
+        def notify(event):
+            if progress is not None:
+                try:
+                    progress(event)
+                except Exception:
+                    pass
         for attempt in range(self.max_retries):
+            notify({"state": "request", "attempt": attempt + 1, "max_attempts": self.max_retries})
+            failure_reason = "模型响应异常"
             request = Request(
                 f"{self.base_url}/chat/completions",
                 data=body,
@@ -76,17 +86,35 @@ class DeepSeekClient:
                     "usage": envelope.get("usage"),
                     "finish_reason": choice.get("finish_reason"),
                     "content": parsed,
+                    "request_diagnostics": {"attempts": attempt + 1,
+                        "elapsed_seconds": round(time.monotonic() - started, 2), "failures": failures},
                 }
                 return parsed, safe_envelope
             except HTTPError as exc:
+                failure_reason = f"模型服务返回HTTP {exc.code}"
                 response_text = exc.read().decode("utf-8", errors="replace")[:1000]
                 last_error = DeepSeekError(f"DeepSeek HTTP {exc.code}: {response_text}")
                 if exc.code not in {408, 429, 500, 502, 503, 504}:
+                    notify({"state": "failed", "attempt": attempt + 1, "reason": failure_reason})
                     break
             except (URLError, TimeoutError, json.JSONDecodeError, KeyError, IndexError, DeepSeekError) as exc:
                 last_error = exc
+                if isinstance(exc, TimeoutError) or (isinstance(exc, URLError) and isinstance(exc.reason, TimeoutError)):
+                    failure_reason = f"网络请求超时（单次网络等待上限{self.timeout_seconds}秒）"
+                elif isinstance(exc, URLError):
+                    failure_reason = "网络连接异常"
+                elif isinstance(exc, json.JSONDecodeError):
+                    failure_reason = "模型响应不是有效JSON"
+                elif isinstance(exc, DeepSeekError):
+                    failure_reason = str(exc)
+            failures.append({"attempt": attempt + 1, "reason": failure_reason})
             if attempt + 1 < self.max_retries:
-                time.sleep(min(2**attempt, 8))
+                delay = min(2**attempt, 8)
+                notify({"state": "retry", "attempt": attempt + 1, "next_attempt": attempt + 2,
+                        "max_attempts": self.max_retries, "reason": failure_reason, "retry_delay": delay})
+                time.sleep(delay)
+            else:
+                notify({"state": "failed", "attempt": attempt + 1, "reason": failure_reason})
         raise DeepSeekError(f"DeepSeek 调用失败：{last_error}")
 
     def classify(self, *, system_prompt: str, user_prompt: str) -> tuple[dict[str, Any], dict[str, Any]]:

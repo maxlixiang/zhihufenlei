@@ -262,6 +262,43 @@ class IncrementalTests(unittest.TestCase):
             copy_incremental(self.database, self.taxonomy, destination_root=self.destination,
                              manifest_path=self.root / "manifest-1.json")
 
+    def test_real_client_retry_events_and_diagnostics_are_preserved(self):
+        from unittest.mock import Mock
+        from zhihu_classifier.deepseek import DeepSeekClient
+        self.add(1)
+        scan_library(self.database,self.source)
+        payload,_=FakeClient().complete_json(system_prompt="文章分析器",user_prompt="u")
+        response=Mock()
+        response.__enter__=Mock(return_value=response)
+        response.__exit__=Mock(return_value=False)
+        response.read.return_value=json.dumps({"choices":[{"finish_reason":"stop",
+            "message":{"content":json.dumps(payload,ensure_ascii=False)}}],"usage":{}}).encode()
+        client=DeepSeekClient(api_key="test-only",base_url="https://invalid.local",model="test")
+        events=[]
+        with patch("zhihu_classifier.deepseek.urlopen",side_effect=[TimeoutError(),response]), \
+             patch("zhihu_classifier.deepseek.time.sleep"):
+            result=analyze_pending(self.database,self.taxonomy,client,limit=1,max_chars=300000,progress=events.append)
+        self.assertEqual(result["processed"],1)
+        self.assertTrue(any(e.get("state")=="retry" and e["current"]==1 for e in events))
+        self.assertTrue(any(e.get("state")=="request" and e["attempt"]==2 for e in events))
+        with self.database.connect() as connection:
+            raw=connection.execute("SELECT raw_response_json FROM article_analyses WHERE error IS NULL").fetchone()[0]
+        diagnostics=json.loads(raw)["request_diagnostics"]
+        self.assertEqual(diagnostics["attempts"],2)
+        self.assertIn("超时",diagnostics["failures"][0]["reason"])
+
+    def test_analysis_progress_has_current_article_then_completed_duration(self):
+        self.add(1)
+        events=[]
+        scan_library(self.database,self.source)
+        result=analyze_pending(self.database,self.taxonomy,self.client,limit=1,max_chars=300000,progress=events.append)
+        self.assertEqual(result["processed"],1)
+        self.assertEqual(events[0]["state"],"started")
+        self.assertEqual(events[0]["current"],1)
+        self.assertEqual(events[0]["title"],"文章1")
+        self.assertEqual(events[-1]["processed"],1)
+        self.assertIsNotNone(events[-1]["elapsed_seconds"])
+
     def test_image_cleanup_in_incremental_copy_preserves_source_and_repeat(self):
         source = self.add(1)
         source.write_text(source.read_text(encoding="utf-8") +

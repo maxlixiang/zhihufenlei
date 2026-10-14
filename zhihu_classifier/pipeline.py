@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from .db import Database
 from .deepseek import DeepSeekClient
+from .model_progress import complete_with_progress
 from .metadata import validate_assignment
 from .prompts import (
     analysis_repair_system_prompt,
@@ -213,6 +214,7 @@ def _emit_progress(
     processed: int,
     errors: int,
     title: str,
+    elapsed_seconds: float | None = None,
 ) -> None:
     if callback is None:
         return
@@ -225,6 +227,7 @@ def _emit_progress(
                 "processed": processed,
                 "errors": errors,
                 "title": title,
+                "elapsed_seconds": elapsed_seconds,
             }
         )
     except Exception:
@@ -273,6 +276,7 @@ def analyze_pending(
         for index, article in enumerate(rows, start=1):
             created_at = utc_now()
             raw_envelope = None
+            item_elapsed = None
             try:
                 # 同批不同路径的相同内容，也复用刚生成的语义档案。
                 if reuse_duplicate_analyses(database, taxonomy, article_id=article["id"]):
@@ -286,11 +290,12 @@ def analyze_pending(
                 content = prepare_article_for_model(
                     _read_full_article(Path(article["source_path"]), max_chars)
                 )
-                payload, raw_envelope = client.complete_json(
+                (payload, raw_envelope), item_elapsed = complete_with_progress(
+                    client, callback=progress,
+                    details={"phase": "full_analysis", "current": index, "total": len(rows),
+                             "processed": processed, "errors": errors, "title": article["title"]},
                     system_prompt=system,
-                    user_prompt=analysis_user_prompt(
-                        article["title"], article["relative_path"], content
-                    ),
+                    user_prompt=analysis_user_prompt(article["title"], article["relative_path"], content),
                 )
                 analysis, assignment = validate_full_response(payload, taxonomy)
                 values = _analysis_dict(analysis)
@@ -361,6 +366,7 @@ def analyze_pending(
                 processed=processed,
                 errors=errors,
                 title=article["title"],
+                elapsed_seconds=item_elapsed,
             )
         connection.execute(
             """
