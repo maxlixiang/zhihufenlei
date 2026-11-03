@@ -9,7 +9,7 @@ import re
 from urllib.parse import unquote
 
 from .db import Database
-from .preprocess import COMMENT_HEADING_RE, FRONT_MATTER_RE
+from .preprocess import COMMENT_HEADING_RE, FRONT_MATTER_RE, split_article_sections
 from .taxonomy import Taxonomy
 
 
@@ -86,12 +86,10 @@ def _parse_review_blocks(path: Path) -> list[dict[str, str]]:
 
 
 def _main_body(text: str) -> str:
-    text = FRONT_MATTER_RE.sub("", text, count=1)
+    text, _ = split_article_sections(text)
     lines: list[str] = []
     skipped_title = False
     for line in text.splitlines():
-        if COMMENT_HEADING_RE.match(line):
-            break
         if not skipped_title and re.match(r"^\s*#\s+", line):
             skipped_title = True
             continue

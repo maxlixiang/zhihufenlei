@@ -4,98 +4,198 @@ import re
 from html import unescape
 
 
+# 只接受独占一行的评论标题；正文中的“评论区有人问……”不是分隔符。
 COMMENT_HEADING_RE = re.compile(
-    r"^\s{0,3}(?:#{1,6}\s*)?(?:💬\s*)?"
-    r"(?:精选评论|热门评论|全部评论|评论区|评论列表|评论\s*(?:\(|（|$))",
+    r"^ {0,3}(?:#{1,6}[ \t]*)?(?:💬[ \t]*)?"
+    r"(?:精选评论|热门评论|全部评论|评论区|评论列表|评论)"
+    r"[ \t]*(?:\([^()\r\n]*\)|（[^（）\r\n]*）)?[ \t]*[:：]?[ \t]*$",
     re.IGNORECASE,
 )
 FRONT_MATTER_RE = re.compile(r"\A---\r?\n.*?\r?\n---\r?\n?", re.DOTALL)
-MARKDOWN_IMAGE_LINE_RE = re.compile(r"^\s*!\[([^\]]*)\]\(.+\)\s*$")
-HTML_IMAGE_LINE_RE = re.compile(r"^\s*<img\b([^>]*)/?>\s*$", re.IGNORECASE)
-HTML_ALT_RE = re.compile(r"\balt=[\"']([^\"']*)[\"']", re.IGNORECASE)
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+HTML_IMAGE_RE = re.compile(r"<img\b[^>]*>", re.I)
+HTML_ALT_RE = re.compile(r"\balt=[\"']([^\"']*)[\"']", re.I)
 
 
-def _clean_lines(lines: list[str]) -> list[str]:
-    cleaned: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        markdown_image = MARKDOWN_IMAGE_LINE_RE.match(line)
-        if markdown_image:
-            alt = markdown_image.group(1).strip()
-            if alt:
-                cleaned.append(f"[图片说明：{alt}]")
+def _fence_end(line, fence):
+    return re.fullmatch(r" {0,3}" + re.escape(fence[0]) + "{" + str(fence[1]) + r",}[ \t]*", line) is not None
+
+
+def split_article_sections(text: str) -> tuple[str, str]:
+    """共享正文边界；代码中的评论标题不作为评论区起点。"""
+    text = FRONT_MATTER_RE.sub("", text.lstrip("\ufeff"), count=1)
+    main, comments = [], []
+    in_comments = False
+    fence = None
+    html_code = False
+    for line in text.splitlines():
+        marker = FENCE_RE.match(line)
+        fenced_line = fence is not None or marker is not None
+        indented = line.startswith(("    ", "\t"))
+        is_code = fence is not None or html_code or indented
+        if not is_code and not marker and not in_comments and COMMENT_HEADING_RE.fullmatch(line):
+            in_comments = True
             continue
-        html_image = HTML_IMAGE_LINE_RE.match(line)
-        if html_image:
-            alt_match = HTML_ALT_RE.search(html_image.group(1))
-            alt = alt_match.group(1).strip() if alt_match else ""
-            if alt:
-                cleaned.append(f"[图片说明：{alt}]")
+        (comments if in_comments else main).append(line)
+        if fence:
+            if _fence_end(line, fence):
+                fence = None
+        elif marker:
+            token = marker.group(1)
+            fence = (token[0], len(token))
+        if not fenced_line and not indented and re.search(r"<(?:pre|code)\b", line, re.I):
+            html_code = True
+        if not fenced_line and not indented and re.search(r"</(?:pre|code)\s*>", line, re.I):
+            html_code = False
+    return "\n".join(main), "\n".join(comments)
+
+
+def _parts(text):
+    """划分代码围栏、代码内容和普通文本；不改写代码示例。"""
+    fence = None
+    normal = []
+    def inline_parts(chunk):
+        start = 0
+        for match in re.finditer(r"(?<!`)(`+)(?!`)", chunk):
+            if match.start() < start:
+                continue
+            close = re.search(r"(?<!`)" + re.escape(match[1]) + r"(?!`)", chunk[match.end():])
+            if close is None:
+                continue
+            end = match.end() + close.end()
+            yield "text", chunk[start:match.start()]
+            yield "code", chunk[match.start():end]
+            start = end
+        yield "text", chunk[start:]
+    for line in text.splitlines(keepends=True):
+        raw = line.rstrip("\r\n")
+        marker = FENCE_RE.match(raw)
+        if fence:
+            if _fence_end(raw, fence):
+                yield "marker", line
+                fence = None
+            else:
+                yield "code", line
+        elif marker or line.startswith(("    ", "\t")):
+            yield from inline_parts("".join(normal))
+            normal.clear()
+            if marker:
+                token = marker[1]
+                fence = (token[0], len(token))
+                yield "marker", line
+            else:
+                yield "code", line
+        else:
+            normal.append(line)
+    yield from inline_parts("".join(normal))
+
+
+def _closing(text, start, opener, closer):
+    depth = 1
+    index = start + 1
+    while index < len(text):
+        if text[index] == "\\":
+            index += 2
             continue
-        if stripped.startswith("<svg ") or stripped.startswith("data:image/"):
+        if text[index] == opener:
+            depth += 1
+        elif text[index] == closer:
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    return None
+
+
+def _markdown_links(text, *, images, describe_images=False):
+    """逐个处理图片/链接，保留相邻的正文，支持嵌套方括号和括号。"""
+    result = []
+    start = 0
+    pattern = r"!\[" if images else r"(?<!!)\["
+    for match in re.finditer(pattern, text):
+        if match.start() < start:
             continue
-        cleaned.append(line.rstrip())
-    return cleaned
+        opening = match.end() - 1
+        end_label = _closing(text, opening, "[", "]")
+        if end_label is None:
+            continue
+        end = end_label + 1
+        label = text[opening + 1:end_label]
+        wiki_image = images and text.startswith("![[", match.start()) and label.startswith("[")
+        if end < len(text) and text[end] in "([":
+            opener = text[end]
+            closer = ")" if opener == "(" else "]"
+            end_target = _closing(text, end, opener, closer)
+            if end_target is None:
+                continue
+            end = end_target + 1
+        elif not wiki_image:
+            continue
+        result.append(text[start:match.start()])
+        if images:
+            if describe_images and label.strip() and not wiki_image:
+                alt = re.sub(r"\\(.)", r"\1", label).strip()
+                result.append(f"[图片说明：{alt}]")
+        else:
+            result.append(label)
+        start = end
+    result.append(text[start:])
+    return "".join(result)
+
+
+def _image_text(text, *, describe):
+    text = _markdown_links(text, images=True, describe_images=describe)
+    def html_image(match):
+        alt = HTML_ALT_RE.search(match[0])
+        return f"[图片说明：{unescape(alt[1])}]" if describe and alt and alt[1].strip() else ""
+    text = HTML_IMAGE_RE.sub(html_image, text)
+    return re.sub(r"<svg\b[^>]*>.*?</svg>", "", text, flags=re.S | re.I)
+
+
+def _model_text(text):
+    return "".join(chunk if kind != "text" else _image_text(chunk, describe=True)
+                   for kind, chunk in _parts(text)).strip()
 
 
 def prepare_article_for_model(text: str) -> str:
-    """移除无语义图片噪声；保留全文文字，并把评论区标为次要材料。"""
-    text = FRONT_MATTER_RE.sub("", text, count=1)
-    main_lines: list[str] = []
-    comment_lines: list[str] = []
-    in_comments = False
-    for line in text.splitlines():
-        if not in_comments and COMMENT_HEADING_RE.match(line):
-            in_comments = True
-            continue
-        (comment_lines if in_comments else main_lines).append(line)
-
-    main = "\n".join(_clean_lines(main_lines)).strip()
-    comments = "\n".join(_clean_lines(comment_lines)).strip()
+    main, comments = split_article_sections(text)
+    main = _model_text(main)
+    comments = _model_text(comments)
+    result = "【文章正文（分类与摘要的主要依据）】\n" + main
     if comments:
-        return (
-            "【文章正文（分类与摘要的主要依据）】\n"
-            f"{main}\n\n"
-            "【评论区（次要材料，仅用于补充语境，不得主导分类）】\n"
-            f"{comments}"
-        )
-    return "【文章正文（分类与摘要的主要依据）】\n" + main
+        result += "\n\n【评论区（次要材料，仅用于补充语境，不得主导分类）】\n" + comments
+    return result
+
+
+# 只移除明确的常见HTML标签，保留书名、比较符和颜文字等普通尖括号内容。
+VISIBLE_TAG_RE = re.compile(
+    r"</?(?:a|abbr|address|article|aside|b|blockquote|body|br|button|caption|center|cite|code|col|colgroup|"
+    r"dd|del|details|dfn|div|dl|dt|em|figcaption|figure|font|footer|form|h[1-6]|head|header|hr|html|i|"
+    r"img|input|ins|kbd|label|legend|li|link|main|mark|meta|nav|ol|option|p|pre|q|rp|rt|ruby|s|samp|"
+    r"section|select|small|source|span|strong|sub|summary|sup|table|tbody|td|textarea|tfoot|th|thead|"
+    r"time|title|tr|u|ul|var|video|wbr)(?=[ \t\r\n/>])[^<>\n]*>", re.I
+)
+
+
+def _count_prose(text):
+    text = _image_text(text, describe=False)
+    text = re.sub(r"(?m)^ {0,3}\[[^\]\n]+\]:[^\n]*$", "", text)
+    text = _markdown_links(text, images=False)
+    text = re.sub(r"https?://[^\s<>]+", "", text, flags=re.I)
+    text = re.sub(r"<!--.*?-->|<(style|script)\b[^>]*>.*?</\1\s*>", "", text, flags=re.S | re.I)
+    text = VISIBLE_TAG_RE.sub("", text)
+    return sum(char.isalnum() for char in unescape(text))
 
 
 def count_body_characters(text: str) -> int:
-    """正文汉字、字母和数字逐字符计数；不含首标题、评论、图片及URL。"""
-    text = FRONT_MATTER_RE.sub("", text.lstrip("\ufeff"), count=1)
-    lines = []
-    at_start = True
-    fence = None
-    for line in text.splitlines():
-        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
-        if fence:
-            if re.match(r"^ {0,3}" + re.escape(fence[0]) + "{" + str(fence[1]) + r",}\s*$", line):
-                fence = None
-            else:
-                lines.append(line)
+    """正文汉字、字母和数字逐字符计数；代码按可见源码统计。"""
+    main, _ = split_article_sections(text)
+    lines = main.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if not line.strip() or re.fullmatch(r"\s*(?:---+|\*\*\*+)\s*", line):
             continue
-        if marker:
-            fence = (marker.group(1)[0], len(marker.group(1)))
-            at_start = False
-            continue
-        if COMMENT_HEADING_RE.match(line):
-            break
-        if at_start and (not line.strip() or re.match(r"^\s*(?:---+|\*\*\*+)\s*$", line)):
-            continue
-        if at_start and re.match(r"^\s*#\s+", line):
-            at_start = False
-            continue
-        at_start = False
-        # 引用链接定义属于Markdown元信息，不是可见正文。
-        if re.match(r"^ {0,3}\[[^\]]+\]:\s*", line):
-            continue
-        lines.append(line)
-    body = "\n".join(lines)
-    body = re.sub(r"<!--.*?-->|<svg\b[^>]*>.*?</svg>", "", body, flags=re.S | re.I)
-    body = re.sub(r"!\[(?:\\.|[^\[\]\\\n]|\[[^\]\n]*\])*\]\((?:[^()\\\n]|\\.|\([^()\n]*\))*\)", "", body)
-    body = re.sub(r"!\[[^\]\n]*\]\[[^\]\n]*\]|!\[\[[^\]\n]*\]\]", "", body)
-    body = re.sub(r"\[((?:\\.|[^\]\\\n])*)\]\((?:[^()\\\n]|\\.|\([^()\n]*\))*\)", r"\1", body)
-    body = re.sub(r"<[^>\n]+>|https?://[^\s<>]+", "", body, flags=re.I)
-    return sum(character.isalnum() for character in unescape(body))
+        if re.match(r"^ {0,3}#\s+", line):
+            lines[index] = ""
+        break
+    return sum(0 if kind == "marker" else sum(char.isalnum() for char in chunk) if kind == "code"
+               else _count_prose(chunk) for kind, chunk in _parts("".join(lines)))

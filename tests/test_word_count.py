@@ -44,3 +44,38 @@ class WordCountTests(unittest.TestCase):
         self.assertEqual(meta['status'],'待审核')
         self.assertIn('中文正文\n## 评论区\n评论',output.decode('utf-8'))
         self.assertIn('正文字数: 999',source.decode('utf-8'))
+
+    def test_comment_mentions_do_not_truncate_count(self):
+        main="正文\n评论区有人问，所以补充。\n后续正文"
+        source="# 标题\n"+main+"\n### 💬 精选评论 (第一页)\n不计入的评论"
+        self.assertEqual(count_body_characters(source),sum(c.isalnum() for c in main))
+
+    def test_html_source_and_comparisons_in_code_are_counted(self):
+        code='<button disabled>保存</button>\nx < 3 and y > 2\n![](example.png)'
+        source="# 标题\n```html\n"+code+"\n```\n## 评论区\n评论"
+        self.assertEqual(count_body_characters(source),sum(c.isalnum() for c in code))
+
+    def test_inline_html_code_is_not_stripped(self):
+        self.assertEqual(count_body_characters('`<button disabled>保存</button>`'),22)
+        self.assertEqual(count_body_characters('<button disabled>保存</button>'),2)
+
+    def test_plain_comparison_keeps_text(self):
+        text='x < 3 and y > 2'
+        self.assertEqual(count_body_characters(text),sum(c.isalnum() for c in text))
+
+    def test_mixed_images_nested_urls_keep_adjacent_prose(self):
+        source='正文![](a(1(2)).png)中间![说明](b.png)结束'
+        self.assertEqual(count_body_characters(source),6)
+
+    def test_code_html_tag_does_not_disable_actual_comment_boundary(self):
+        code='<code>'
+        text='# 标题\n```html\n'+code+'\n```\n正文\n## 评论区\n不计入'
+        self.assertEqual(count_body_characters(text),6)
+
+    def test_angle_bracket_book_titles_and_emoticons_do_not_hide_following_text(self):
+        text='<Style Toward Clarity and Grace>\n完整英文段落 English prose\no>\\_<o(我是分割线) 后续文字'
+        self.assertEqual(count_body_characters(text),sum(c.isalnum() for c in text))
+
+    def test_real_complete_html_style_is_not_visible_prose(self):
+        text='正文<style>body { color: red; }</style><b>继续</b>'
+        self.assertEqual(count_body_characters(text),4)
