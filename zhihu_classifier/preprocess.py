@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from html import unescape
 
 
 COMMENT_HEADING_RE = re.compile(
@@ -59,3 +60,42 @@ def prepare_article_for_model(text: str) -> str:
             f"{comments}"
         )
     return "【文章正文（分类与摘要的主要依据）】\n" + main
+
+
+def count_body_characters(text: str) -> int:
+    """正文汉字、字母和数字逐字符计数；不含首标题、评论、图片及URL。"""
+    text = FRONT_MATTER_RE.sub("", text.lstrip("\ufeff"), count=1)
+    lines = []
+    at_start = True
+    fence = None
+    for line in text.splitlines():
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if fence:
+            if re.match(r"^ {0,3}" + re.escape(fence[0]) + "{" + str(fence[1]) + r",}\s*$", line):
+                fence = None
+            else:
+                lines.append(line)
+            continue
+        if marker:
+            fence = (marker.group(1)[0], len(marker.group(1)))
+            at_start = False
+            continue
+        if COMMENT_HEADING_RE.match(line):
+            break
+        if at_start and (not line.strip() or re.match(r"^\s*(?:---+|\*\*\*+)\s*$", line)):
+            continue
+        if at_start and re.match(r"^\s*#\s+", line):
+            at_start = False
+            continue
+        at_start = False
+        # 引用链接定义属于Markdown元信息，不是可见正文。
+        if re.match(r"^ {0,3}\[[^\]]+\]:\s*", line):
+            continue
+        lines.append(line)
+    body = "\n".join(lines)
+    body = re.sub(r"<!--.*?-->|<svg\b[^>]*>.*?</svg>", "", body, flags=re.S | re.I)
+    body = re.sub(r"!\[(?:\\.|[^\[\]\\\n]|\[[^\]\n]*\])*\]\((?:[^()\\\n]|\\.|\([^()\n]*\))*\)", "", body)
+    body = re.sub(r"!\[[^\]\n]*\]\[[^\]\n]*\]|!\[\[[^\]\n]*\]\]", "", body)
+    body = re.sub(r"\[((?:\\.|[^\]\\\n])*)\]\((?:[^()\\\n]|\\.|\([^()\n]*\))*\)", r"\1", body)
+    body = re.sub(r"<[^>\n]+>|https?://[^\s<>]+", "", body, flags=re.I)
+    return sum(character.isalnum() for character in unescape(body))

@@ -287,6 +287,25 @@ class IncrementalTests(unittest.TestCase):
         self.assertEqual(diagnostics["attempts"],2)
         self.assertIn("超时",diagnostics["failures"][0]["reason"])
 
+    def test_new_note_has_numeric_body_count_and_repeat_preserves_user_note(self):
+        source=self.add(1)
+        source.write_text("# 文章1\n中文正文 AI 2026\n### 💬 精选评论 (第一页)\n评论不计入",encoding="utf-8")
+        before=source.read_bytes()
+        first=self.update()
+        self.assertEqual(first["copy"]["copied"],1)
+        note=next(self.destination.rglob("文章1.md"))
+        text=note.read_text(encoding="utf-8")
+        meta=yaml.safe_load(text.split("---",2)[1])
+        self.assertEqual(meta["正文字数"],10)
+        self.assertIs(type(meta["正文字数"]),int)
+        self.assertEqual(source.read_bytes(),before)
+        note.write_text(text+"\n我的阅读笔记",encoding="utf-8")
+        edited=note.read_bytes()
+        second=self.update()
+        self.assertEqual(second["copy"]["copied"],0)
+        self.assertEqual(note.read_bytes(),edited)
+        self.assertEqual(self.client.calls,1)
+
     def test_analysis_progress_has_current_article_then_completed_duration(self):
         self.add(1)
         events=[]

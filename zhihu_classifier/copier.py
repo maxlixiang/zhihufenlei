@@ -12,6 +12,7 @@ import yaml
 
 from .db import Database
 from .image_cleanup import clean_markdown_images
+from .preprocess import count_body_characters
 from .taxonomy import Taxonomy
 
 
@@ -94,6 +95,7 @@ def _render_obsidian_copy(
         "source_hash": source_hash,
         "taxonomy_version": taxonomy_version,
         "status": "待审核" if needs_review else "已分类",
+        "正文字数": count_body_characters(body),
     }
     frontmatter = {**existing, **generated}
     yaml_text = yaml.safe_dump(
